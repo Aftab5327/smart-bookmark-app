@@ -9,7 +9,7 @@ export default function Dashboard() {
   const [bookmarks, setBookmarks] = useState([]);
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [deletingId, setDeletingId] = useState(null); // For delete feedback
+  const [deletingId, setDeletingId] = useState(null);
   const router = useRouter();
 
   // Get user on mount
@@ -33,18 +33,23 @@ export default function Dashboard() {
 
   // Fetch bookmarks
   async function fetchBookmarks(userId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("bookmarks")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
-    if (data) setBookmarks(data);
+    if (error) {
+      console.error("Failed to fetch bookmarks:", error.message);
+      return;
+    }
+
+    setBookmarks(data || []);
   }
 
-  // Subscribe to bookmark changes
+  // Subscribe to real-time bookmark changes
   function subscribeToBookmarks(userId) {
-    supabase
+    const channel = supabase
       .channel("bookmarks-channel")
       .on(
         "postgres_changes",
@@ -54,16 +59,24 @@ export default function Dashboard() {
           table: "bookmarks",
           filter: `user_id=eq.${userId}`,
         },
-        () => fetchBookmarks(userId)
+        (payload) => {
+          console.log("Real-time update:", payload);
+          fetchBookmarks(userId);
+        }
       )
       .subscribe();
+
+    // Cleanup on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 
   // Add a new bookmark
   async function addBookmark() {
     if (!title || !url) return;
 
-    await supabase.from("bookmarks").insert([
+    const { error } = await supabase.from("bookmarks").insert([
       {
         user_id: user.id,
         title,
@@ -71,23 +84,31 @@ export default function Dashboard() {
       },
     ]);
 
+    if (error) {
+      console.error("Failed to add bookmark:", error.message);
+      alert("Failed to add bookmark. Try again.");
+      return;
+    }
+
     setTitle("");
     setUrl("");
+    fetchBookmarks(user.id); // Refresh UI immediately
   }
 
-  // Delete a bookmark (persistent and waits for confirmation)
+  // Delete a bookmark
   async function deleteBookmark(id) {
-    setDeletingId(id); // show deleting feedback
+    setDeletingId(id);
+
     const { error } = await supabase.from("bookmarks").delete().eq("id", id);
 
     if (error) {
       console.error("Failed to delete bookmark:", error.message);
       alert("Failed to delete bookmark. Try again.");
     } else {
-      fetchBookmarks(user.id); // Refresh UI after deletion
+      fetchBookmarks(user.id);
     }
 
-    setDeletingId(null); // reset
+    setDeletingId(null);
   }
 
   // Logout user
