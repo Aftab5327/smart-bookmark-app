@@ -1,13 +1,16 @@
 "use client";
 
-import { supabase } from "../supabase";
+import { supabase } from "./lib/supabase";
 
 export default function LoginPage() {
   const loginWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: "http://localhost:3000/dashboard" },
+      options: {
+        redirectTo: process.env.NEXT_PUBLIC_REDIRECT_URL, // must match Vercel URL
+      },
     });
+    if (error) console.error("Login error:", error.message);
   };
 
   return (

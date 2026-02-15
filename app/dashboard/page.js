@@ -1,206 +1,151 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "../../supabase";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 
-export default function Dashboard() {
-  const [user, setUser] = useState(null);
+export default function DashboardPage() {
+  const [userEmail, setUserEmail] = useState(null);
+  const [userId, setUserId] = useState(null);
   const [bookmarks, setBookmarks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [deletingId, setDeletingId] = useState(null);
-  const router = useRouter();
 
-  // Get user on mount
+  // Fetch session
   useEffect(() => {
-    getUser();
+    const getSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) return console.error(error);
+
+      if (!session?.user) return window.location.href = "/";
+
+      setUserEmail(session.user.email);
+      setUserId(session.user.id);
+      setLoading(false);
+
+      fetchBookmarks(session.user.id);
+    };
+
+    getSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUserEmail(session.user.email);
+        setUserId(session.user.id);
+        setLoading(false);
+        fetchBookmarks(session.user.id);
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Get logged-in user
-  async function getUser() {
-    const { data } = await supabase.auth.getUser();
-
-    if (!data.user) {
-      router.push("/");
-      return;
-    }
-
-    setUser(data.user);
-    fetchBookmarks(data.user.id);
-    subscribeToBookmarks(data.user.id);
-  }
-
-  // Fetch bookmarks
-  async function fetchBookmarks(userId) {
+  // Fetch bookmarks for logged-in user
+  const fetchBookmarks = async (uid) => {
     const { data, error } = await supabase
       .from("bookmarks")
       .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .eq("user_id", uid)
+      .order("id", { ascending: false });
 
-    if (error) {
-      console.error("Failed to fetch bookmarks:", error.message);
-      return;
-    }
+    if (error) return console.error("Fetch bookmarks error:", error);
 
-    setBookmarks(data || []);
-  }
+    setBookmarks(data);
+  };
 
-  // Subscribe to real-time bookmark changes
-  function subscribeToBookmarks(userId) {
-    const channel = supabase
-      .channel("bookmarks-channel")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "bookmarks",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          console.log("Real-time update:", payload);
-          fetchBookmarks(userId);
-        }
-      )
-      .subscribe();
+  // Add bookmark
+  const addBookmark = async () => {
+    if (!title || !url) return alert("Please fill both fields");
 
-    // Cleanup on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }
+    const { error } = await supabase
+      .from("bookmarks")
+      .insert({ user_id: userId, title, url });
 
-  // Add a new bookmark
-  async function addBookmark() {
-    if (!title || !url) return;
-
-    const { error } = await supabase.from("bookmarks").insert([
-      {
-        user_id: user.id,
-        title,
-        url,
-      },
-    ]);
-
-    if (error) {
-      console.error("Failed to add bookmark:", error.message);
-      alert("Failed to add bookmark. Try again.");
-      return;
-    }
+    if (error) return console.error("Add bookmark error:", error);
 
     setTitle("");
     setUrl("");
-    fetchBookmarks(user.id); // Refresh UI immediately
-  }
+    fetchBookmarks(userId);
+  };
 
-  // Delete a bookmark
-  async function deleteBookmark(id) {
-    setDeletingId(id);
+  // Delete bookmark
+  const deleteBookmark = async (id) => {
+    const { error } = await supabase
+      .from("bookmarks")
+      .delete()
+      .eq("id", id);
 
-    const { error } = await supabase.from("bookmarks").delete().eq("id", id);
+    if (error) return console.error("Delete bookmark error:", error);
 
-    if (error) {
-      console.error("Failed to delete bookmark:", error.message);
-      alert("Failed to delete bookmark. Try again.");
-    } else {
-      fetchBookmarks(user.id);
-    }
+    fetchBookmarks(userId);
+  };
 
-    setDeletingId(null);
-  }
-
-  // Logout user
-  async function logout() {
-    await supabase.auth.signOut();
-    router.push("/");
-  }
-
-  // Loading state
-  if (!user) {
+  if (loading) {
     return (
-      <p className="text-center mt-10 text-gray-700 font-medium">
-        Loading...
-      </p>
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <p className="text-gray-500">Loading...</p>
+      </div>
     );
   }
 
-  // Main dashboard UI
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-8">
+    <div className="flex flex-col items-center min-h-screen bg-gray-100 p-8">
+      <h1 className="text-3xl font-bold mb-4">Dashboard</h1>
+      <p className="text-green-600 font-medium mb-6">Logged in as: {userEmail}</p>
 
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Welcome, {user.email}
-          </h1>
-          <button
-            onClick={logout}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
-          >
-            Logout
-          </button>
-        </div>
+      {/* Add Bookmark Form */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-6">
+        <input
+          type="text"
+          placeholder="Bookmark Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="border p-2 rounded"
+        />
+        <input
+          type="text"
+          placeholder="Bookmark URL"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          className="border p-2 rounded"
+        />
+        <button
+          onClick={addBookmark}
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Add
+        </button>
+      </div>
 
-        {/* Add Bookmark */}
-        <div className="flex gap-3 mb-8">
-          <input
-            type="text"
-            placeholder="Bookmark Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="flex-1 border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <input
-            type="text"
-            placeholder="https://example.com"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="flex-1 border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <button
-            onClick={addBookmark}
-            className="bg-blue-600 text-white px-6 rounded-lg hover:bg-blue-700 transition"
-          >
-            Add
-          </button>
-        </div>
-
-        {/* Bookmark List */}
-        <div className="space-y-4">
-          {bookmarks.length === 0 && (
-            <p className="text-center text-gray-500">
-              No bookmarks added yet.
-            </p>
-          )}
-
-          {bookmarks.map((bookmark) => (
-            <div
-              key={bookmark.id}
-              className="flex justify-between items-center bg-gray-50 p-4 rounded-xl shadow-sm hover:shadow-md transition"
-            >
-              <a
-                href={bookmark.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 font-semibold hover:underline"
+      {/* Bookmarks List */}
+      <div className="w-full max-w-md">
+        {bookmarks.length === 0 ? (
+          <p className="text-gray-500">No bookmarks yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {bookmarks.map((bm) => (
+              <li
+                key={bm.id}
+                className="flex justify-between items-center bg-white p-3 rounded shadow"
               >
-                {bookmark.title}
-              </a>
-
-              <button
-                onClick={() => deleteBookmark(bookmark.id)}
-                className="text-red-500 font-medium hover:text-red-700 transition"
-                disabled={deletingId === bookmark.id}
-              >
-                {deletingId === bookmark.id ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          ))}
-        </div>
-
+                <a
+                  href={bm.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  {bm.title}
+                </a>
+                <button
+                  onClick={() => deleteBookmark(bm.id)}
+                  className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
