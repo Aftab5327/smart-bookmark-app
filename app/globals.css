@@ -2,12 +2,4 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional minimal reset */
-html,
-body {
-  height: 100%;
-}
 
-body {
-  margin: 0;
-}
