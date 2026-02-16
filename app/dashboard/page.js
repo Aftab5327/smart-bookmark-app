@@ -11,13 +11,15 @@ export default function DashboardPage() {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
 
-  // Fetch session
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
       if (error) return console.error(error);
 
-      if (!session?.user) return window.location.href = "/";
+      if (!session?.user) return (window.location.href = "/");
 
       setUserEmail(session.user.email);
       setUserId(session.user.id);
@@ -40,7 +42,6 @@ export default function DashboardPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Fetch bookmarks for logged-in user
   const fetchBookmarks = async (uid) => {
     const { data, error } = await supabase
       .from("bookmarks")
@@ -48,18 +49,15 @@ export default function DashboardPage() {
       .eq("user_id", uid)
       .order("id", { ascending: false });
 
-    if (error) return console.error("Fetch bookmarks error:", error);
+    if (error) return console.error(error);
 
     setBookmarks(data);
   };
 
-  // Add bookmark
   const addBookmark = async () => {
     if (!title || !url) return alert("Please fill both fields");
 
-    const { error } = await supabase
-      .from("bookmarks")
-      .insert({ user_id: userId, title, url });
+    const { error } = await supabase.from("bookmarks").insert({ user_id: userId, title, url });
 
     if (error) return console.error("Add bookmark error:", error);
 
@@ -68,13 +66,8 @@ export default function DashboardPage() {
     fetchBookmarks(userId);
   };
 
-  // Delete bookmark
   const deleteBookmark = async (id) => {
-    const { error } = await supabase
-      .from("bookmarks")
-      .delete()
-      .eq("id", id);
-
+    const { error } = await supabase.from("bookmarks").delete().eq("id", id);
     if (error) return console.error("Delete bookmark error:", error);
 
     fetchBookmarks(userId);
@@ -82,70 +75,96 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <p className="text-gray-500">Loading...</p>
+      <div className="min-h-screen bg-slate-100 px-4 py-10">
+        <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-slate-500">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold mb-4">Dashboard</h1>
-      <p className="text-green-600 font-medium mb-6">Logged in as: {userEmail}</p>
+    <div className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Your Dashboard</h1>
+          <p className="mt-2 text-sm text-slate-600">Manage all your saved links in one clean space.</p>
+          <div className="mt-4 inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            Logged in as: <span className="ml-1 font-semibold text-slate-900">{userEmail}</span>
+          </div>
+        </section>
 
-      {/* Add Bookmark Form */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-6">
-        <input
-          type="text"
-          placeholder="Bookmark Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <input
-          type="text"
-          placeholder="Bookmark URL"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <button
-          onClick={addBookmark}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Add
-        </button>
-      </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-1">
+            <h2 className="text-lg font-semibold text-slate-900">Add Bookmark</h2>
+            <p className="mt-1 text-sm text-slate-500">Add a title and URL to save a new bookmark.</p>
 
-      {/* Bookmarks List */}
-      <div className="w-full max-w-md">
-        {bookmarks.length === 0 ? (
-          <p className="text-gray-500">No bookmarks yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {bookmarks.map((bm) => (
-              <li
-                key={bm.id}
-                className="flex justify-between items-center bg-white p-3 rounded shadow"
+            <div className="mt-5 space-y-3">
+              <input
+                type="text"
+                placeholder="Bookmark title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              <input
+                type="url"
+                placeholder="https://example.com"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                onClick={addBookmark}
+                className="w-full rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white transition hover:bg-blue-700"
               >
-                <a
-                  href={bm.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline"
-                >
-                  {bm.title}
-                </a>
-                <button
-                  onClick={() => deleteBookmark(bm.id)}
-                  className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                Save Bookmark
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Your Bookmarks</h2>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                {bookmarks.length} total
+              </span>
+            </div>
+
+            {bookmarks.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
+                No bookmarks yet. Add your first one from the box on the left.
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {bookmarks.map((bm) => (
+                  <li
+                    key={bm.id}
+                    className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <a
+                        href={bm.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate text-base font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                      >
+                        {bm.title}
+                      </a>
+                      <p className="mt-1 truncate text-sm text-slate-500">{bm.url}</p>
+                    </div>
+                    <button
+                      onClick={() => deleteBookmark(bm.id)}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );
